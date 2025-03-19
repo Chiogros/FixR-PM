@@ -20,6 +20,13 @@ PRIMARY_PATH="$WORKDIR/$PRIMARY_FILENAME"
 PRIMARY_COMPRESSED_PATH="$WORKDIR/$PRIMARY_COMPRESSED_FILENAME"
 REPOMDXML_PATH="$WORKDIR/$REPOMD_FILENAME"
 
+#############
+# Functions #
+#############
+# Follow a mirror and download repomd.xml
+[ -f "$REPOMD_FILENAME" ] && rm "$REPOMD_FILENAME"
+repo_url="$(wget "$FEDORA_MIRRORS_URL" --metalink | sed -Ez "s/.*(http.*)\/$REPOMD_FILENAME.*/\1/")"
+
 # Loop over the binaries
 find /usr/bin | while read -r bin; do
 	echo "Name: $bin"
