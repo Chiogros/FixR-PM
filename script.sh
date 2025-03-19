@@ -9,6 +9,7 @@ readonly ARCH="$(uname -m)"
 readonly OS_VERSION="$(grep VERSION_ID /etc/os-release | cut -d '=' -f 2)"
 
 readonly FEDORA_MIRRORS_URL="https://mirrors.fedoraproject.org/metalink?repo=fedora-${OS_VERSION}&arch=${ARCH}"
+declare -a COMMON_PKG_FILES_PATH=("/usr/bin/" "/usr/lib/" "/usr/lib64")
 
 readonly PRIMARY_NAME="primary"
 readonly PRIMARY_FILENAME="$PRIMARY_NAME.sqlite"
@@ -45,27 +46,28 @@ fi
 [ -f $PRIMARY_COMPRESSED_PATH ] && gzip -d -f "$PRIMARY_COMPRESSED_PATH" -c >"$PRIMARY_PATH"
 
 # Loop over the binaries
-find /usr/bin | while read -r bin; do
-	echo "path: $bin"
+for common_path in "${COMMON_PKG_FILES_PATH[@]}"; do
+	find "$common_path" | while read -r bin; do
+		echo "path: $bin"
 
-	# Get package providing binary
-	hrefs="$(sqlite "$PRIMARY_PATH" -- "SELECT location_href FROM packages WHERE (arch = '$ARCH' or arch = 'noarch') AND pkgKey IN (SELECT pkgKey FROM files WHERE name = '$bin')")"
+		# Get package providing binary
+		hrefs="$(sqlite "$PRIMARY_PATH" -- "SELECT location_href FROM packages WHERE (arch = '$ARCH' or arch = 'noarch') AND pkgKey IN (SELECT pkgKey FROM files WHERE name = '$bin')")"
 
-	if [ -n "$hrefs" ]; then
-		# Multiple packages may provide same file, print them all
-		for href in $hrefs; do
-			echo "href: $href"
-			echo "$href" >>"$PKGS_TO_DL_PATH"
-		done
-	else
-		echo "href: not found." >&2
-	fi
+		if [ -n "$hrefs" ]; then
+			# Multiple packages may provide same file, print them all
+			for href in $hrefs; do
+				echo "href: $href"
+				echo "$href" >>"$PKGS_TO_DL_PATH"
+			done
+		else
+			echo "href: not found." >&2
+		fi
+	done
 done
 
 # Download packages
 echo "Start to download $(wc -l $PKGS_TO_DL_PATH) packages."
 while read -r pkg; do
-	continue
 	wget -B "$repo_url" "$pkg" -P "$PKGS_DL_PATH" -c
 done <"$PKGS_TO_DL_PATH"
 
