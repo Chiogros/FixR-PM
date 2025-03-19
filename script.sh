@@ -65,16 +65,19 @@ for common_path in "${COMMON_PKG_FILES_PATH[@]}"; do
 	done
 done
 
+# Multiple files may be brought by a single package, clean list to avoid useless requests.
+sort -u -o "$PKGS_TO_DL_PATH" "$PKGS_TO_DL_PATH"
+
 # Download packages
-echo "Start to download $(wc -l $PKGS_TO_DL_PATH) packages."
+echo "Start to download $(wc -l $PKGS_TO_DL_PATH | cut -d ' ' -f 1) packages."
 while read -r pkg; do
 	wget -B "$repo_url" "$pkg" -P "$PKGS_DL_PATH" -c
 done <"$PKGS_TO_DL_PATH"
 
-# Handle RPM
+# Rebuild RPM database
 sudo rpm --rebuilddb
 
 # Install packages
 for pkg in "$PKGS_DL_PATH"/*.rpm; do
-	sudo rpm -i -v --nodeps --justdb "$pkg"
+	sudo rpm -i -v --nodeps --justdb "$pkg" || continue
 done
