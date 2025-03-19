@@ -34,20 +34,19 @@ gzip -d -f "$PRIMARY_COMPRESSED_PATH" -c >"$PRIMARY_PATH"
 
 # Loop over the binaries
 find /usr/bin | while read -r bin; do
-	echo "Name: $bin"
+	echo "path: $bin"
 
-	# Look for package ID related to binary name
-	sqlite "$FILELIST_DB" -- "SELECT pkgKey FROM files WHERE name = '$bin'" | while read -r pkgKey; do
+	# Get package providing binary
+	hrefs="$(sqlite "$PRIMARY_PATH" -- "SELECT location_href FROM packages WHERE arch = '$ARCH' AND pkgKey IN (SELECT pkgKey FROM files WHERE name = '$bin')")"
 
-		# Get package name providing binary
-		href="$(sqlite "$FILELIST_DB" -- "SELECT location_href FROM packages WHERE pkgKey = $pkgKey AND arch = '$ARCH'")"
-
-		if [ -n "$href" ]; then
+	if [ -n "$hrefs" ]; then
+		# Multiple packages may provide same file, print them all
+		for href in $hrefs; do
 			echo "href: $href"
-		else
-			echo "No package found for arch or not from any repository." >&2
-		fi
-	done
+		done
+	else
+		echo "href: not found." >&2
+	fi
 done
 
 # rpm --rebuilddb
