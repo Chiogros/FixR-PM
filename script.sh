@@ -27,6 +27,11 @@ REPOMDXML_PATH="$WORKDIR/$REPOMD_FILENAME"
 [ -f "$REPOMD_FILENAME" ] && rm "$REPOMD_FILENAME"
 repo_url="$(wget "$FEDORA_MIRRORS_URL" --metalink | sed -Ez "s/.*(http.*)\/$REPOMD_FILENAME.*/\1/")"
 
+# Download list of packages and files
+primary_url="$(grep "$PRIMARY_COMPRESSED_FILENAME" "$REPOMD_FILENAME" | cut -d '"' -f 2)"
+wget -B "$repo_url" "$primary_url" -O "$PRIMARY_COMPRESSED_PATH"
+gzip -d -f "$PRIMARY_COMPRESSED_PATH" -c >"$PRIMARY_PATH"
+
 # Loop over the binaries
 find /usr/bin | while read -r bin; do
 	echo "Name: $bin"
