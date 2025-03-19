@@ -19,10 +19,14 @@ WORKDIR=$DEFAULT_WORKDIR
 PRIMARY_PATH="$WORKDIR/$PRIMARY_FILENAME"
 PRIMARY_COMPRESSED_PATH="$WORKDIR/$PRIMARY_COMPRESSED_FILENAME"
 REPOMDXML_PATH="$WORKDIR/$REPOMD_FILENAME"
+PKGS_TO_DL_PATH="$WORKDIR/pkgs_to_dl"
+PKGS_DL_PATH="$WORKDIR/pkgs"
 
 #############
 # Functions #
 #############
+[ -f "$PKGS_TO_DL_PATH" ] && rm "$PKGS_TO_DL_PATH"
+
 # Follow a mirror and download repomd.xml
 [ -f "$REPOMD_FILENAME" ] && rm "$REPOMD_FILENAME"
 repo_url="$(wget "$FEDORA_MIRRORS_URL" --metalink | sed -Ez "s/.*(http.*)\/$REPOMD_FILENAME.*/\1/")"
@@ -43,10 +47,24 @@ find /usr/bin | while read -r bin; do
 		# Multiple packages may provide same file, print them all
 		for href in $hrefs; do
 			echo "href: $href"
+			echo "$href" >>"$PKGS_TO_DL_PATH"
 		done
 	else
 		echo "href: not found." >&2
 	fi
 done
 
-# rpm --rebuilddb
+# Download packages
+echo "Start to download $(wc -l $PKGS_TO_DL_PATH) packages."
+while read -r pkg; do
+	continue
+	wget -B "$repo_url" "$pkg" -P "$PKGS_DL_PATH" -c
+done <"$PKGS_TO_DL_PATH"
+
+# Handle RPM
+sudo rpm --rebuilddb
+
+# Install packages
+for pkg in "$PKGS_DL_PATH"/*.rpm; do
+	sudo rpm -i -v --nodeps --justdb "$pkg"
+done
