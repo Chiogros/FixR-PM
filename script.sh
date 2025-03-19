@@ -41,7 +41,7 @@ find /usr/bin | while read -r bin; do
 	echo "path: $bin"
 
 	# Get package providing binary
-	hrefs="$(sqlite "$PRIMARY_PATH" -- "SELECT location_href FROM packages WHERE arch = '$ARCH' AND pkgKey IN (SELECT pkgKey FROM files WHERE name = '$bin')")"
+	hrefs="$(sqlite "$PRIMARY_PATH" -- "SELECT location_href FROM packages WHERE (arch = '$ARCH' or arch = 'noarch') AND pkgKey IN (SELECT pkgKey FROM files WHERE name = '$bin')")"
 
 	if [ -n "$hrefs" ]; then
 		# Multiple packages may provide same file, print them all
