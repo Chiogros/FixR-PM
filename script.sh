@@ -33,8 +33,16 @@ repo_url="$(wget "$FEDORA_MIRRORS_URL" --metalink | sed -Ez "s/.*(http.*)\/$REPO
 
 # Download list of packages and files
 primary_url="$(grep "$PRIMARY_COMPRESSED_FILENAME" "$REPOMD_FILENAME" | cut -d '"' -f 2)"
-wget -B "$repo_url" "$primary_url" -O "$PRIMARY_COMPRESSED_PATH"
-gzip -d -f "$PRIMARY_COMPRESSED_PATH" -c >"$PRIMARY_PATH"
+if [ -f $PRIMARY_COMPRESSED_PATH ] || [ -f $PRIMARY_PATH ]; then
+	read -r -p "Database already downloaded. Download it again? [Y/n] " res
+	[ "$res" == "n" ] || wget -B "$repo_url" "$primary_url" -O "$PRIMARY_COMPRESSED_PATH"
+else
+	wget -B "$repo_url" "$primary_url" -O "$PRIMARY_COMPRESSED_PATH"
+fi
+
+# Decompress.
+# Check if file exists since only .sqlite file could exist
+[ -f $PRIMARY_COMPRESSED_PATH ] && gzip -d -f "$PRIMARY_COMPRESSED_PATH" -c >"$PRIMARY_PATH"
 
 # Loop over the binaries
 find /usr/bin | while read -r bin; do
