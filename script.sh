@@ -1,11 +1,24 @@
 #!/usr/bin/sh
 
+#############
+# Variables #
+#############
 readonly DEFAULT_WORKDIR=/tmp
-readonly FILELIST_DB="$DEFAULT_WORKDIR/filelists.sqlite"
+
 readonly ARCH="$(uname -m)"
 readonly OS_VERSION="$(grep VERSION_ID /etc/os-release | cut -d '=' -f 2)"
 
+readonly FEDORA_MIRRORS_URL="https://mirrors.fedoraproject.org/metalink?repo=fedora-${OS_VERSION}&arch=${ARCH}"
+
+readonly PRIMARY_NAME="primary"
+readonly PRIMARY_FILENAME="$PRIMARY_NAME.sqlite"
+readonly PRIMARY_COMPRESSED_FILENAME="$PRIMARY_FILENAME.gz"
+readonly REPOMD_FILENAME="repomd.xml"
+
 WORKDIR=$DEFAULT_WORKDIR
+PRIMARY_PATH="$WORKDIR/$PRIMARY_FILENAME"
+PRIMARY_COMPRESSED_PATH="$WORKDIR/$PRIMARY_COMPRESSED_FILENAME"
+REPOMDXML_PATH="$WORKDIR/$REPOMD_FILENAME"
 
 # Loop over the binaries
 find /usr/bin | while read -r bin; do
