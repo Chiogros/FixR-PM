@@ -78,6 +78,12 @@ done
 # Multiple files may be brought by a single package, clean list to avoid useless requests.
 sort -u -o "$PKGS_LIST_PATH" "$PKGS_LIST_PATH"
 
+nb_of_pkgs="$(wc -l $PKGS_LIST_PATH | cut -d ' ' -f 1)"
+if [ "$nb_of_pkgs" -eq 0 ]; then
+	echo "No packages found."
+	exit 1
+fi
+
 # Download packages
 echo "Start to download $(wc -l $PKGS_LIST_PATH | cut -d ' ' -f 1) packages."
 while read -r pkg; do
