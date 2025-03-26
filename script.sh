@@ -7,15 +7,14 @@ readonly DEFAULT_WORKDIR=/tmp
 
 readonly PRIMARY_NAME="primary"
 readonly PRIMARY_FILENAME="$PRIMARY_NAME.sqlite"
-readonly PRIMARY_COMPRESSED_FILENAME="$PRIMARY_FILENAME.gz"
+readonly PRIMARY_COMPRESSED_FILENAME="$PRIMARY_FILENAME.compressed"
 readonly REPOMD_FILENAME="repomd.xml"
 declare -ar COMMON_PKG_FILES_PATH=("/usr" "/etc")
 
 ARCH="$(uname -m)"
-OS_VERSION="$(grep VERSION_ID /etc/os-release | cut -d '=' -f 2)"
-readonly FEDORA_MIRRORS_URL="https://mirrors.fedoraproject.org/metalink?repo=fedora-${OS_VERSION}&arch=${ARCH}"
+REPO_URLS="$(dnf -q repo info --enabled | grep "Base URL" | grep -Eo 'http[^ ]+' | sed 's/\/$//')"
 
-WORKDIR=$DEFAULT_WORKDIR
+WORKDIR="$DEFAULT_WORKDIR"
 PRIMARY_PATH="$WORKDIR/$PRIMARY_FILENAME"
 PRIMARY_COMPRESSED_PATH="$WORKDIR/$PRIMARY_COMPRESSED_FILENAME"
 REPOMD_PATH="$WORKDIR/$REPOMD_FILENAME"
@@ -25,44 +24,54 @@ PKGS_DL_PATH="$WORKDIR/pkgs"
 #############
 # Functions #
 #############
-[ -f "$PKGS_LIST_PATH" ] && rm "$PKGS_LIST_PATH"
 
-# Follow a mirror and download repomd.xml.
-# wget doesn't care about (-O) when metalink file.
-[ -f "$REPOMD_PATH" ] && rm "$REPOMD_PATH"
-repo_url="$(wget "$FEDORA_MIRRORS_URL" --metalink | sed -Ez "s/.*(http.*)\/$REPOMD_FILENAME.*/\1/")"
-mv $REPOMD_FILENAME $REPOMD_PATH
+echo -n >"$PKGS_LIST_PATH"
 
-# Download list of packages and files
-primary_url="$(grep "$PRIMARY_COMPRESSED_FILENAME" "$REPOMD_FILENAME" | cut -d '"' -f 2)"
-if [ -f $PRIMARY_COMPRESSED_PATH ] || [ -f $PRIMARY_PATH ]; then
-	read -r -p "Database already downloaded. Download it again? [Y/n]: " res
-	[ "$res" == "n" ] || wget -B "$repo_url" "$primary_url" -O "$PRIMARY_COMPRESSED_PATH"
-else
-	wget -B "$repo_url" "$primary_url" -O "$PRIMARY_COMPRESSED_PATH"
-fi
+for repo_url in $REPO_URLS; do
 
-# Decompress.
-# Check if file exists since only .sqlite file could exist
-[ -f $PRIMARY_COMPRESSED_PATH ] && gzip -d -f "$PRIMARY_COMPRESSED_PATH" -c >"$PRIMARY_PATH"
+	# Follow a mirror and download repomd.xml.
+	[ -f "$REPOMD_PATH" ] && rm "$REPOMD_PATH"
+	repomd_url="${repo_url}/repodata/repomd.xml"
+	wget "${repomd_url}" -O "$REPOMD_PATH"
 
-# Loop over the binaries
-for common_path in "${COMMON_PKG_FILES_PATH[@]}"; do
-	find "$common_path" | while read -r bin; do
-		echo "path: $bin"
+	# Download list of packages and files
+	primary_url="$(grep "$PRIMARY_FILENAME" "$REPOMD_PATH" | cut -d '"' -f 2)"
+	[ -z "$primary_url" ] && continue
+	wget "${repo_url}/$primary_url" -O "$PRIMARY_COMPRESSED_PATH"
 
-		# Get package providing binary
-		hrefs="$(sqlite "$PRIMARY_PATH" -- "SELECT location_href FROM packages WHERE (arch = '$ARCH' or arch = 'noarch') AND pkgKey IN (SELECT pkgKey FROM files WHERE name = '$bin')")"
+	# Uncompressed data
+	case "$(file $PRIMARY_COMPRESSED_PATH)" in
+	*bzip2*) bzip2 -d "$PRIMARY_COMPRESSED_PATH" -c >"$PRIMARY_PATH" ;;
+	*gzip*) gzip -d -f "$PRIMARY_COMPRESSED_PATH" -c >"$PRIMARY_PATH" ;;
+	*)
+		echo "Unsupported filetype:" >&2
+		file "$PRIMARY_COMPRESSED_PATH" >&2
+		continue
+		;;
+	esac
 
-		if [ -n "$hrefs" ]; then
-			# Multiple packages may provide same file, print them all
-			for href in $hrefs; do
-				echo "href: $href"
-				echo "$href" >>"$PKGS_LIST_PATH"
-			done
-		else
-			echo "href: not found." >&2
-		fi
+	# Loop over each directory
+	for common_path in "${COMMON_PKG_FILES_PATH[@]}"; do
+
+		# Loop over each file
+		find "$common_path" 2>/dev/null | while read -r bin; do
+
+			#echo "path: $bin"
+
+			# Get package providing file
+			hrefs="$(sqlite "$PRIMARY_PATH" -- "SELECT location_href FROM packages WHERE (arch = '$ARCH' or arch = 'noarch') AND pkgKey IN (SELECT pkgKey FROM files WHERE name = '$bin')")"
+
+			if [ -n "$hrefs" ]; then
+				# Print all packages providing file
+				for href in $hrefs; do
+					echo "href: $href"
+					echo "${repo_url}/$href" >>"$PKGS_LIST_PATH"
+				done
+			else
+				#echo "href: not found." >&2
+				echo -n
+			fi
+		done
 	done
 done
 
