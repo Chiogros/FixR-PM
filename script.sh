@@ -85,10 +85,8 @@ if [ "$nb_of_pkgs" -eq 0 ]; then
 fi
 
 # Download packages
-echo "Start to download $(wc -l $PKGS_LIST_PATH | cut -d ' ' -f 1) packages."
-while read -r pkg; do
-	wget -B "$repo_url" "$pkg" -P "$PKGS_DL_PATH" -c
-done <"$PKGS_LIST_PATH"
+echo "Start to download $nb_of_pkgs packages."
+wget -i "$PKGS_LIST_PATH" -P "$PKGS_DL_PATH" -c
 
 # Rebuild RPM database
 sudo rpm --rebuilddb
