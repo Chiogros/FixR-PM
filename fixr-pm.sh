@@ -6,10 +6,9 @@
 readonly DEFAULT_WORKDIR=/tmp
 
 readonly PRIMARY_NAME="primary"
-readonly PRIMARY_FILENAME="$PRIMARY_NAME.sqlite"
+readonly PRIMARY_FILENAME="$PRIMARY_NAME.xml"
 readonly PRIMARY_COMPRESSED_FILENAME="$PRIMARY_FILENAME.compressed"
 readonly REPOMD_FILENAME="repomd.xml"
-declare -ar COMMON_PKG_FILES_PATH=("/usr" "/etc")
 
 ARCH="$(uname -m)"
 REPO_URLS="$(dnf -q repo info --enabled | grep "Base URL" | grep -Eo 'http[^ ]+' | sed 's/\/$//')"
@@ -44,34 +43,32 @@ for repo_url in $REPO_URLS; do
 	*bzip2*) bzip2 -d "$PRIMARY_COMPRESSED_PATH" -c >"$PRIMARY_PATH" ;;
 	*gzip*) gzip -d -f "$PRIMARY_COMPRESSED_PATH" -c >"$PRIMARY_PATH" ;;
 	*)
-		echo "Unsupported filetype:" >&2
+		echo -n "Unsupported filetype: " >&2
 		file "$PRIMARY_COMPRESSED_PATH" >&2
 		continue
 		;;
 	esac
 
-	echo "Scanning files..."
+	echo "Getting repository packages data..."
+	pkgs_data="$(grep -E '<(name|arch|file|location)' "$PRIMARY_PATH" |\
+                 grep -Eoz "<name>[^<]+</name>[^<]+<arch>($ARCH|noarch)</arch>[^<]+<location[^<]+(<file[^<]+</file>[^<]+)+" |\
+                 tr -d '\n' | sed -z 's/<name>/\n<name>/g' | sed '/^[\t ]*$/d')"
 
-	# Loop over each directory
-	for common_path in "${COMMON_PKG_FILES_PATH[@]}"; do
+	# Loop over each package in repo
+	echo "Searching for packages files on filesystem..."
+	echo -n "$pkgs_data" | while read -r pkg_data; do
+		name="$(sed -E 's|.*name>(.*)</name.*|\1|' <<<"$pkg_data")"
+		href="$(sed -E 's|.*location href="(.*)"/>.*|\1|' <<<"$pkg_data")"
+		files="$(sed -E 's|.*file( type="dir")?>(.*)</file.*|\2\n|' <<<"$pkg_data")"
 
-		# Loop over each file
-		find "$common_path" 2>/dev/null | while read -r bin; do
+		echo "Looking for package $name..."
 
-			#echo "path: $bin"
-
-			# Get package providing file
-			hrefs="$(sqlite "$PRIMARY_PATH" -- "SELECT location_href FROM packages WHERE (arch = '$ARCH' or arch = 'noarch') AND pkgKey IN (SELECT pkgKey FROM files WHERE name = '$bin')")"
-
-			if [ -n "$hrefs" ]; then
-				# Print all packages providing file
-				for href in $hrefs; do
-					echo "href: $href"
-					echo "${repo_url}/$href" >>"$PKGS_LIST_PATH"
-				done
-			else
-				#echo "href: not found." >&2
-				echo -n
+		# Loop over each file provided by package
+		for file in $files; do
+			if [ -e "$file" ]; then
+				echo "Package $name found."
+				echo "${repo_url}/$href" >>"$PKGS_LIST_PATH"
+				break
 			fi
 		done
 	done
