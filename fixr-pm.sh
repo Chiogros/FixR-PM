@@ -50,6 +50,8 @@ for repo_url in $REPO_URLS; do
 		;;
 	esac
 
+	echo "Scanning files..."
+
 	# Loop over each directory
 	for common_path in "${COMMON_PKG_FILES_PATH[@]}"; do
 
